@@ -16,6 +16,9 @@ interface ComposerProps {
   onSend: (content: string) => void
   onStop?: () => void
   isSending: boolean
+  /** While streaming, allow typing + Enter to queue the next message. */
+  canQueue?: boolean
+  queuedPreview?: string | null
   disabled?: boolean
   justSent?: boolean
 }
@@ -27,7 +30,15 @@ const ROTATING_KEYS = [
   'composer.placeholderRotating.3',
 ] as const
 
-export function Composer({ onSend, onStop, isSending, disabled, justSent }: ComposerProps) {
+export function Composer({
+  onSend,
+  onStop,
+  isSending,
+  canQueue,
+  queuedPreview,
+  disabled,
+  justSent,
+}: ComposerProps) {
   const t = useT()
   const reduce = useReducedMotion()
   const [value, setValue] = useState('')
@@ -53,7 +64,8 @@ export function Composer({ onSend, onStop, isSending, disabled, justSent }: Comp
 
   function submit() {
     const content = value.trim()
-    if (!content || isSending || disabled) return
+    if (!content || disabled) return
+    if (isSending && !canQueue) return
     if (!reduce) setVanishing(content)
     setValue('')
     onSend(content)
@@ -72,11 +84,18 @@ export function Composer({ onSend, onStop, isSending, disabled, justSent }: Comp
     }
   }
 
-  const canSend = value.trim().length > 0 && !isSending && !disabled
-  const showStop = isSending && !!onStop
+  const canSendNow = value.trim().length > 0 && (!isSending || canQueue) && !disabled
+  const showStop = isSending && !!onStop && !value.trim()
+  const showQueueSend = isSending && !!canQueue && value.trim().length > 0
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-5 pt-2 sm:px-6">
+      {queuedPreview && (
+        <div className="mb-2 flex items-start gap-2 rounded-xl border border-border bg-surface/80 px-3 py-2 text-sm backdrop-blur-sm">
+          <span className="shrink-0 font-medium text-muted">{t('composer.queue')}:</span>
+          <span className="line-clamp-2 min-w-0 text-foreground">{queuedPreview}</span>
+        </div>
+      )}
       <form
         onSubmit={handleSubmit}
         className={cn(
@@ -120,18 +139,24 @@ export function Composer({ onSend, onStop, isSending, disabled, justSent }: Comp
 
         <MagneticButton
           type={showStop ? 'button' : 'submit'}
-          ariaLabel={showStop ? t('composer.stop') : t('composer.send')}
+          ariaLabel={
+            showStop ? t('composer.stop') : showQueueSend ? t('composer.queueReplace') : t('composer.send')
+          }
           onClick={showStop ? onStop : undefined}
-          disabled={showStop ? false : !canSend}
+          disabled={showStop ? false : !canSendNow}
           className={cn(
             'mb-0.5 h-10 w-10 shrink-0 rounded-full text-accent-foreground shadow-e1',
-            canSend || isSending ? 'bg-accent hover:bg-accent-hover' : 'bg-border-strong text-surface',
+            canSendNow || showStop ? 'bg-accent hover:bg-accent-hover' : 'bg-border-strong text-surface',
           )}
         >
           <AnimatePresence mode="wait" initial={false}>
             {showStop ? (
               <motion.span key="stop" initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
                 <Square className="h-[1.05rem] w-[1.05rem] fill-current" />
+              </motion.span>
+            ) : showQueueSend || canSendNow ? (
+              <motion.span key="send" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }}>
+                <ArrowUp className="h-[1.15rem] w-[1.15rem]" />
               </motion.span>
             ) : isSending ? (
               <motion.span key="load" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -151,7 +176,11 @@ export function Composer({ onSend, onStop, isSending, disabled, justSent }: Comp
       </form>
 
       <p className="mt-2 text-center text-xs text-muted-2">
-        {showStop ? t('composer.hintStop') : t('composer.hint')}
+        {showStop
+          ? t('composer.hintStop')
+          : showQueueSend || queuedPreview
+            ? t('composer.hintQueue')
+            : t('composer.hint')}
       </p>
     </div>
   )

@@ -33,10 +33,13 @@ export function ChatApp() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [justSent, setJustSent] = useState(false)
   const [banner, setBanner] = useState<BannerKind | null>(null)
+  /** Next message to send automatically when the current stream finishes. */
+  const [queuedContent, setQueuedContent] = useState<string | null>(null)
   // Streamed replies reveal themselves token-by-token, so no per-message
   // reveal animation is needed; kept as a stable empty set for MessageThread.
   const revealIds = useMemo(() => new Set<string>(), [])
   const streamAbortRef = useRef<AbortController | null>(null)
+  const queueRef = useRef<string | null>(null)
   /** Prevents double-submit (e.g. double-clicking a suggested prompt). */
   const sendLockRef = useRef(false)
   /** When true, skip auto-selecting the most recent thread (user chose "Nuwe gesprek"). */
@@ -51,6 +54,11 @@ export function ChatApp() {
   const detail = conversationQuery.data
   const messages =
     selectedId && detail?.id === selectedId ? detail.messages : []
+
+  const clearQueue = useCallback(() => {
+    queueRef.current = null
+    setQueuedContent(null)
+  }, [])
 
   const clearStreamState = useCallback(() => {
     setPendingUser(null)
@@ -181,9 +189,11 @@ export function ChatApp() {
         setTimeout(() => setJustSent(false), 1500)
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
+          clearQueue()
           void queryClient.invalidateQueries({ queryKey: conversationKeys.detail(conversationId) })
           return
         }
+        clearQueue()
         setBanner(mapError(err))
       } finally {
         setStreamingText(null)
@@ -192,22 +202,29 @@ export function ChatApp() {
         streamAbortRef.current = null
       }
     },
-    [queryClient, t],
+    [queryClient, t, clearQueue],
   )
 
   const handleSelect = useCallback(
     (id: string) => {
       draftModeRef.current = false
       streamAbortRef.current?.abort()
+      clearQueue()
       clearStreamState()
       setSelectedId(id)
     },
-    [clearStreamState],
+    [clearStreamState, clearQueue],
   )
 
   const handleSend = useCallback(
     async (content: string) => {
-      if (sendLockRef.current || isStreaming || createMutation.isPending) return
+      if (isStreaming) {
+        queueRef.current = content
+        setQueuedContent(content)
+        return
+      }
+
+      if (sendLockRef.current || createMutation.isPending) return
       sendLockRef.current = true
 
       try {
@@ -223,7 +240,14 @@ export function ChatApp() {
             return
           }
         }
-        await send(content, id)
+
+        let next: string | null = content
+        while (next) {
+          queueRef.current = null
+          setQueuedContent(null)
+          await send(next, id)
+          next = queueRef.current
+        }
       } finally {
         sendLockRef.current = false
       }
@@ -232,16 +256,18 @@ export function ChatApp() {
   )
 
   const handleStop = useCallback(() => {
+    clearQueue()
     streamAbortRef.current?.abort()
-  }, [])
+  }, [clearQueue])
 
   const handleNew = useCallback(() => {
     setBanner(null)
     streamAbortRef.current?.abort()
+    clearQueue()
     clearStreamState()
     draftModeRef.current = true
     setSelectedId(null)
-  }, [clearStreamState])
+  }, [clearStreamState, clearQueue])
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -250,6 +276,7 @@ export function ChatApp() {
         await deleteMutation.mutateAsync(id)
         if (selectedId === id) {
           streamAbortRef.current?.abort()
+          clearQueue()
           clearStreamState()
           draftModeRef.current = true
           setSelectedId(null)
@@ -258,7 +285,7 @@ export function ChatApp() {
         setBanner(mapError(err))
       }
     },
-    [deleteMutation, selectedId, t, clearStreamState],
+    [deleteMutation, selectedId, t, clearStreamState, clearQueue],
   )
 
   const handleRetry = useCallback(
@@ -266,12 +293,12 @@ export function ChatApp() {
       const idx = messages.findIndex((m) => m.id === assistant.id)
       for (let i = idx - 1; i >= 0; i--) {
         if (messages[i].role === 'user') {
-          if (selectedId) void send(messages[i].content, selectedId)
+          void handleSend(messages[i].content)
           return
         }
       }
     },
-    [messages, selectedId, send],
+    [messages, handleSend],
   )
 
   // "Thinking" = stream started but no token has arrived yet.
@@ -329,7 +356,7 @@ export function ChatApp() {
         </AnimatePresence>
 
         {showEmpty ? (
-          <EmptyState disabled={isBusy} onPick={(prompt) => void handleSend(prompt)} />
+          <EmptyState disabled={createMutation.isPending} onPick={(prompt) => void handleSend(prompt)} />
         ) : (
           <MessageThread
             messages={messages}
@@ -344,6 +371,8 @@ export function ChatApp() {
         <Composer
           onSend={(content) => void handleSend(content)}
           onStop={isStreaming ? handleStop : undefined}
+          canQueue={isStreaming}
+          queuedPreview={queuedContent}
           isSending={isBusy}
           justSent={justSent}
         />

@@ -25,6 +25,9 @@ export const af = {
   'composer.stop': 'Stop genereer',
   'composer.hint': 'Enter om te stuur · Shift+Enter vir nuwe reël',
   'composer.hintStop': 'Klik stop om te staak · Enter om te stuur',
+  'composer.hintQueue': 'Enter om in die ry te sit · Stop om te staak',
+  'composer.queue': 'Volgende boodskap',
+  'composer.queueReplace': 'Vervang volgende boodskap',
 
   'message.you': 'Jy',
   'message.assistant': 'Koffiegesels',
