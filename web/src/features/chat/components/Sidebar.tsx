@@ -131,6 +131,9 @@ function SidebarBody({
 function UserFooter() {
   const t = useT()
   const auth = useAuth()
+  // During HMR the provider can briefly unmount; avoid crashing the sidebar.
+  if (!auth?.isAuthenticated) return null
+
   const profile = auth.user?.profile
   const name = profile?.preferred_username ?? profile?.name ?? profile?.email ?? ''
   const initial = name.trim().charAt(0).toUpperCase() || '·'
