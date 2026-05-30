@@ -1,8 +1,10 @@
 import type {
   ConversationDetail,
   ConversationSummary,
+  MessageWithConversation,
   SendMessageResult,
 } from './types'
+import { readEventStream } from './stream'
 
 const apiBase = import.meta.env.VITE_API_BASE ?? '/api'
 
@@ -70,6 +72,66 @@ export function sendMessage(conversationId: string, content: string): Promise<Se
     method: 'POST',
     body: JSON.stringify({ content }),
   })
+}
+
+export interface StreamMessageCallbacks {
+  /** Real persisted user message (replaces the optimistic one). */
+  onMeta?: (userMessage: MessageWithConversation) => void
+  /** A streamed chunk of assistant text. */
+  onToken?: (delta: string) => void
+  /** Final persisted assistant message. */
+  onDone?: (assistantMessage: MessageWithConversation) => void
+}
+
+/**
+ * Streams an assistant reply via SSE. Resolves once the stream ends; rejects
+ * with {@link ApiError} on a non-OK response or a server `error` frame.
+ */
+export async function streamMessage(
+  conversationId: string,
+  content: string,
+  callbacks: StreamMessageCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(buildUrl(`/conversations/${conversationId}/stream`), {
+    method: 'POST',
+    signal,
+    headers: {
+      Accept: 'text/event-stream',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ content }),
+  })
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => undefined)
+    throw new ApiError(`API ${response.status}: ${response.statusText}`, response.status, body)
+  }
+
+  let streamError: ApiError | null = null
+
+  await readEventStream(response, (event, data) => {
+    switch (event) {
+      case 'meta':
+        callbacks.onMeta?.((JSON.parse(data) as { userMessage: MessageWithConversation }).userMessage)
+        break
+      case 'token':
+        callbacks.onToken?.((JSON.parse(data) as { delta: string }).delta)
+        break
+      case 'done':
+        callbacks.onDone?.((JSON.parse(data) as { assistantMessage: MessageWithConversation }).assistantMessage)
+        break
+      case 'error': {
+        const payload = JSON.parse(data) as { title?: string; detail?: string; status?: number }
+        streamError = new ApiError(payload.detail ?? payload.title ?? 'Stream error', payload.status ?? 500)
+        break
+      }
+    }
+  })
+
+  if (streamError) {
+    throw streamError
+  }
 }
 
 /** Authenticated variant for Phase 6 — reintroduce Bearer token here. */

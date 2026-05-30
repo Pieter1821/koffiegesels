@@ -1,17 +1,18 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Menu } from 'lucide-react'
-import type { Message } from '@/api/types'
-import { ApiError } from '@/api/client'
+import type { ConversationDetail, Message, MessageWithConversation } from '@/api/types'
+import { ApiError, streamMessage } from '@/api/client'
 import { useT } from '@/i18n'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Tooltip } from '@/components/ui/Tooltip'
 import {
+  conversationKeys,
   useConversation,
   useConversations,
   useCreateConversation,
   useDeleteConversation,
-  useSendMessage,
 } from '../hooks/useConversations'
 import { Sidebar } from './Sidebar'
 import { MessageThread } from './MessageThread'
@@ -23,20 +24,24 @@ const AuroraBackground = lazy(() => import('@/components/ui/AuroraBackground'))
 
 export function ChatApp() {
   const t = useT()
+  const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [pendingUser, setPendingUser] = useState<string | null>(null)
+  const [streamingText, setStreamingText] = useState<string | null>(null)
+  const [isStreaming, setIsStreaming] = useState(false)
   const [justSent, setJustSent] = useState(false)
   const [banner, setBanner] = useState<BannerKind | null>(null)
-  const [revealIds, setRevealIds] = useState<Set<string>>(() => new Set())
-  const revealedRef = useRef<Set<string>>(new Set())
+  // Streamed replies reveal themselves token-by-token, so no per-message
+  // reveal animation is needed; kept as a stable empty set for MessageThread.
+  const revealIds = useMemo(() => new Set<string>(), [])
+  const streamAbortRef = useRef<AbortController | null>(null)
 
   const conversationsQuery = useConversations()
   const conversationQuery = useConversation(selectedId)
   const createMutation = useCreateConversation()
   const deleteMutation = useDeleteConversation()
-  const sendMutation = useSendMessage()
 
   const conversations = conversationsQuery.data ?? []
   const messages = conversationQuery.data?.messages ?? []
@@ -48,14 +53,8 @@ export function ChatApp() {
     }
   }, [conversations, selectedId])
 
-  // Reveal (animate) each freshly received assistant message exactly once.
-  useEffect(() => {
-    const id = sendMutation.data?.assistantMessage.id
-    if (id && !revealedRef.current.has(id)) {
-      revealedRef.current.add(id)
-      setRevealIds((prev) => new Set(prev).add(id))
-    }
-  }, [sendMutation.data])
+  // Abort any in-flight stream on unmount.
+  useEffect(() => () => streamAbortRef.current?.abort(), [])
 
   // Offline awareness.
   useEffect(() => {
@@ -72,17 +71,72 @@ export function ChatApp() {
     async (content: string, conversationId: string) => {
       setBanner(null)
       setPendingUser(content)
+      setStreamingText('')
+      setIsStreaming(true)
+
+      const controller = new AbortController()
+      streamAbortRef.current = controller
+      let realUser: MessageWithConversation | null = null
+
       try {
-        await sendMutation.mutateAsync({ conversationId, content })
+        await streamMessage(
+          conversationId,
+          content,
+          {
+            onMeta: (userMessage) => {
+              realUser = userMessage
+            },
+            onToken: (delta) => {
+              setStreamingText((prev) => (prev ?? '') + delta)
+            },
+            onDone: (assistantMessage) => {
+              // Write both persisted messages into the cache and clear the
+              // streaming/optimistic state in a single batch — no flicker.
+              queryClient.setQueryData<ConversationDetail>(
+                conversationKeys.detail(conversationId),
+                (old) => {
+                  if (!old) return old
+                  const next = [...old.messages]
+                  if (realUser && !next.some((m) => m.id === realUser!.id)) {
+                    next.push({
+                      id: realUser.id,
+                      role: realUser.role,
+                      content: realUser.content,
+                      createdAt: realUser.createdAt,
+                    })
+                  }
+                  if (!next.some((m) => m.id === assistantMessage.id)) {
+                    next.push({
+                      id: assistantMessage.id,
+                      role: assistantMessage.role,
+                      content: assistantMessage.content,
+                      createdAt: assistantMessage.createdAt,
+                    })
+                  }
+                  return { ...old, messages: next }
+                },
+              )
+              void queryClient.invalidateQueries({ queryKey: conversationKeys.all })
+              setStreamingText(null)
+              setPendingUser(null)
+            },
+          },
+          controller.signal,
+        )
         setJustSent(true)
         setTimeout(() => setJustSent(false), 1500)
       } catch (err) {
-        setBanner(mapError(err))
+        if (!(err instanceof DOMException && err.name === 'AbortError')) {
+          setBanner(mapError(err))
+        }
       } finally {
+        setStreamingText(null)
         setPendingUser(null)
+        setIsStreaming(false)
+        streamAbortRef.current = null
       }
     },
-    [sendMutation],
+    [queryClient],
   )
 
   const handleSend = useCallback(
@@ -142,7 +196,8 @@ export function ChatApp() {
     [messages, selectedId, send],
   )
 
-  const isThinking = sendMutation.isPending
+  // "Thinking" = stream started but no token has arrived yet.
+  const isThinking = isStreaming && !streamingText
   const showEmpty = !selectedId || (messages.length === 0 && !pendingUser && !conversationQuery.isLoading)
   const title = conversationQuery.data?.title ?? t('app.name')
 
@@ -201,6 +256,7 @@ export function ChatApp() {
             messages={messages}
             revealIds={revealIds}
             pendingUser={pendingUser}
+            streamingText={streamingText}
             isThinking={isThinking}
             onRetry={handleRetry}
           />

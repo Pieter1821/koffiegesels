@@ -4,6 +4,7 @@ using Koffiegesels.Api.Features.Conversations.GetConversation;
 using Koffiegesels.Api.Features.Conversations.ListConversations;
 using Koffiegesels.Api.Features.Messages.AddMessage;
 using Koffiegesels.Api.Features.Messages.SendMessage;
+using Koffiegesels.Api.Features.Messages.StreamMessage;
 
 namespace Koffiegesels.Api.Features.Conversations;
 
@@ -20,5 +21,6 @@ public static class ConversationsEndpoints
         group.MapDeleteConversation();
         group.MapAddMessage();
         group.MapSendMessage();
+        group.MapStreamMessage();
     }
 }

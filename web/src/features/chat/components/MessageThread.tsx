@@ -10,6 +10,8 @@ interface MessageThreadProps {
   messages: Message[]
   revealIds: Set<string>
   pendingUser: string | null
+  /** Assistant text streaming in right now (null when not streaming). */
+  streamingText: string | null
   isThinking: boolean
   onRetry: (assistantMessage: Message) => void
 }
@@ -20,6 +22,7 @@ export function MessageThread({
   messages,
   revealIds,
   pendingUser,
+  streamingText,
   isThinking,
   onRetry,
 }: MessageThreadProps) {
@@ -89,6 +92,19 @@ export function MessageThread({
                 id: 'pending-user',
                 role: 'user',
                 content: pendingUser,
+                createdAt: new Date().toISOString(),
+              }}
+              reveal={false}
+            />
+          )}
+
+          {streamingText && (
+            <MessageBubble
+              key="streaming-assistant"
+              message={{
+                id: 'streaming-assistant',
+                role: 'assistant',
+                content: streamingText,
                 createdAt: new Date().toISOString(),
               }}
               reveal={false}
