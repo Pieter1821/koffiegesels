@@ -1,0 +1,181 @@
+/* ─────────────────────────────────────────────────────────────
+   Koffiegesels — "Vroeglig" login theme
+   Layered on top of keycloak.v2 (Keycloak 26 / PatternFly 5).
+   Mirrors the web app palette in web/src/index.css.
+   ───────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..600&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --kg-background: #faf7f2;
+  --kg-surface: #ffffff;
+  --kg-foreground: #1f1a14;
+  --kg-muted: #6b5e4f;
+  --kg-border: #ece4d8;
+  --kg-border-strong: #ddd1bf;
+  --kg-accent: #c2682b;
+  --kg-accent-hover: #ab5a22;
+  --kg-accent-foreground: #ffffff;
+  --kg-accent-soft: rgba(194, 104, 43, 0.12);
+  --kg-accent-glow: rgba(194, 104, 43, 0.28);
+  --kg-danger: #b3402a;
+  --kg-shadow: 0 14px 44px rgba(31, 26, 20, 0.14);
+  --kg-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --kg-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --kg-background: #14110d;
+    --kg-surface: #1e1a14;
+    --kg-foreground: #f3ece1;
+    --kg-muted: #a89a86;
+    --kg-border: #2e2820;
+    --kg-border-strong: #3d3528;
+    --kg-accent: #e0935a;
+    --kg-accent-hover: #eca36a;
+    --kg-accent-foreground: #1f1a14;
+    --kg-accent-soft: rgba(224, 147, 90, 0.14);
+    --kg-accent-glow: rgba(224, 147, 90, 0.3);
+    --kg-danger: #e8856b;
+    --kg-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* Page background — replace PatternFly's image with a warm cream wash */
+.pf-v5-c-background-image,
+.pf-v5-c-background-image::before {
+  display: none !important;
+}
+
+body,
+.login-pf body,
+.pf-v5-c-login__container {
+  background: radial-gradient(120% 120% at 50% -10%, var(--kg-accent-soft) 0%, transparent 55%),
+    var(--kg-background) !important;
+  font-family: var(--kg-body) !important;
+  color: var(--kg-foreground) !important;
+}
+
+/* The login card */
+.pf-v5-c-login__main,
+.card-pf {
+  background: var(--kg-surface) !important;
+  border: 1px solid var(--kg-border) !important;
+  border-radius: 20px !important;
+  box-shadow: var(--kg-shadow) !important;
+  padding: 2rem 2.25rem !important;
+}
+
+/* Headings + brand wordmark */
+#kc-header-wrapper {
+  font-family: var(--kg-display) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--kg-foreground) !important;
+  text-transform: none !important;
+  font-size: 1.5rem !important;
+}
+
+#kc-page-title,
+.pf-v5-c-login__main-header-desc,
+.pf-v5-c-title {
+  font-family: var(--kg-display) !important;
+  color: var(--kg-foreground) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+}
+
+label,
+.pf-v5-c-form__label,
+.pf-v5-c-form__label-text {
+  color: var(--kg-muted) !important;
+  font-family: var(--kg-body) !important;
+  font-weight: 500 !important;
+}
+
+/* Text inputs */
+input[type='text'],
+input[type='password'],
+input[type='email'],
+.pf-v5-c-form-control,
+.pf-v5-c-form-control > input {
+  background: var(--kg-background) !important;
+  border: 1px solid var(--kg-border-strong) !important;
+  border-radius: 12px !important;
+  color: var(--kg-foreground) !important;
+  font-family: var(--kg-body) !important;
+  box-shadow: none !important;
+  transition: border-color 160ms ease, box-shadow 160ms ease !important;
+}
+
+input[type='text']:focus,
+input[type='password']:focus,
+input[type='email']:focus,
+.pf-v5-c-form-control:focus-within {
+  border-color: var(--kg-accent) !important;
+  box-shadow: 0 0 0 3px var(--kg-accent-soft) !important;
+  outline: none !important;
+}
+
+/* Primary button */
+#kc-login,
+.pf-v5-c-button.pf-m-primary,
+input[type='submit'].pf-m-primary {
+  background: var(--kg-accent) !important;
+  border: none !important;
+  border-radius: 12px !important;
+  color: var(--kg-accent-foreground) !important;
+  font-family: var(--kg-body) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+  padding: 0.7rem 1rem !important;
+  transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease !important;
+}
+
+#kc-login:hover,
+.pf-v5-c-button.pf-m-primary:hover {
+  background: var(--kg-accent-hover) !important;
+  box-shadow: 0 0 0 1px var(--kg-accent-glow), 0 10px 30px rgba(194, 104, 43, 0.22) !important;
+}
+
+#kc-login:active,
+.pf-v5-c-button.pf-m-primary:active {
+  transform: translateY(1px) !important;
+}
+
+/* Secondary / link-style buttons */
+.pf-v5-c-button.pf-m-secondary {
+  border-color: var(--kg-border-strong) !important;
+  color: var(--kg-foreground) !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+}
+
+/* Links */
+a,
+#kc-info a,
+.pf-v5-c-login__main-footer a {
+  color: var(--kg-accent) !important;
+  text-decoration: none !important;
+}
+
+a:hover {
+  color: var(--kg-accent-hover) !important;
+  text-decoration: underline !important;
+}
+
+/* "Remember me" checkbox accent */
+input[type='checkbox'] {
+  accent-color: var(--kg-accent) !important;
+}
+
+/* Alerts (error/info) — soften to brand danger */
+.pf-v5-c-alert.pf-m-danger,
+.alert-error {
+  border-radius: 12px !important;
+}
+.pf-v5-c-alert.pf-m-danger .pf-v5-c-alert__title,
+.alert-error .kc-feedback-text {
+  color: var(--kg-danger) !important;
+}

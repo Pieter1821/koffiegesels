@@ -44,7 +44,14 @@ builder.AddProject<Koffiegesels_Api>("koffiegesels-api")
 if (builder.ExecutionContext.IsRunMode)
 {
     keycloak.WithDataVolume()
-            .WithRealmImport("./realms");
+            .WithRealmImport("./realms")
+            // Mount our custom login theme alongside the built-in themes (do NOT
+            // mount over /opt/keycloak/themes or the base themes disappear).
+            .WithBindMount("themes/koffiegesels", "/opt/keycloak/themes/koffiegesels", isReadOnly: true)
+            // Dev: serve theme edits without restarting the container.
+            .WithEnvironment("KC_SPI_THEME_CACHE_THEMES", "false")
+            .WithEnvironment("KC_SPI_THEME_CACHE_TEMPLATES", "false")
+            .WithEnvironment("KC_SPI_THEME_STATIC_MAX_AGE", "-1");
 }
 
 if (builder.ExecutionContext.IsPublishMode)

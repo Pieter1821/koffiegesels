@@ -3,6 +3,7 @@
   "realm" : "koffiegesels",
   "displayName" : "",
   "displayNameHtml" : "",
+  "loginTheme" : "koffiegesels",
   "notBefore" : 0,
   "defaultSignatureAlgorithm" : "RS256",
   "revokeRefreshToken" : false,
