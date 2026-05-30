@@ -16,6 +16,8 @@ msbuild.binlog
 # Secrets / local config
 *.env
 .env*
+!.env.example
+!**/.env.example
 appsettings.*.local.json
 secrets.json
 
@@ -30,5 +32,7 @@ Thumbs.db
 
 # PRDs and internal planning docs (do not commit)
 docs/PRD.md
+docs/HANDOFF.md
+docs/ROADMAP.md
 **/*PRD*.md
 **/*prd*.md

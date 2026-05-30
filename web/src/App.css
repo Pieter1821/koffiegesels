@@ -1,0 +1,32 @@
+.app {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  font-family: system-ui, sans-serif;
+}
+
+header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.75rem;
+}
+
+.tagline {
+  margin: 0 0 1.5rem;
+  color: #444;
+}
+
+.hint {
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+  color: #555;
+}
+
+.error {
+  color: #a00;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+}

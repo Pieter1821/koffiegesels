@@ -4,13 +4,39 @@ Afrikaans-first chat API on .NET 10 (Aspire) + Azure OpenAI. Backend derived fro
 
 ## Run
 
+**Backend** (from repo root):
+
 ```bash
-# from repo root
 dotnet build Koffiegesels.slnx
 dotnet run --project src/Koffiegesels.AppHost   # or: aspire run
 ```
 
-The Aspire AppHost orchestrates the API, PostgreSQL, and Keycloak. Use the Aspire dashboard URL printed on startup.
+The Aspire AppHost orchestrates the API, PostgreSQL, and Keycloak. Use the Aspire dashboard URL printed on startup. Note the API HTTP URL for the Vite proxy (default standalone: `http://localhost:5082`).
+
+**Frontend** (separate terminal):
+
+```bash
+cd web
+cp .env.example .env.local   # once
+npm install
+npm run dev                  # http://localhost:5173
+```
+
+Browser uses `/api` → Vite proxy → .NET API. Login uses Keycloak directly (`koffiegesels-web` SPA client, PKCE).
+
+## Frontend stack (chosen conventions)
+
+| Area | Choice | Why |
+|------|--------|-----|
+| Framework | React 19 + TypeScript (strict) | Ecosystem, hiring, chat UI patterns |
+| Build | Vite | Fast dev, SSE-friendly proxy |
+| Auth | `react-oidc-context` + PKCE public client | Standard OIDC for SPAs; no secrets in the browser |
+| Server state | TanStack Query | Conversations/messages when API exists |
+| API calls | Thin `api/client.ts` + `api/stream.ts` | One place for Bearer token + errors |
+| Dev networking | Vite proxy `/api` only | Same-origin API calls; Keycloak not proxied |
+| Prod networking | Static build + `AllowedOrigins` or ingress `/api` | No Vite proxy in production |
+
+Do not add Redux, Next.js, or a second UI framework. Feature UI lives under `web/src/features/`.
 
 ## Architecture rules
 
@@ -34,6 +60,8 @@ The Aspire AppHost orchestrates the API, PostgreSQL, and Keycloak. Use the Aspir
 | `AzureOpenAI:Deployment` | user-secrets / Azure | e.g. `gpt-4o-mini` |
 | `Auth:Authority` | Aspire / env | Keycloak realm URL |
 | `SWAGGERUI_CLIENTID` | config | Swagger OAuth client |
+| `VITE_API_PROXY_TARGET` | `web/.env.local` | API URL for Vite dev proxy |
+| `VITE_OIDC_*` | `web/.env.local` | Keycloak authority + `koffiegesels-web` client |
 
 Local Keycloak test user: `demo` / `demo`. Admin: `admin` / `admin`.
 
