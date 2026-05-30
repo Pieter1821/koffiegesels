@@ -47,13 +47,14 @@ public static class SendMessageEndpoint
 
             dbContext.Messages.Add(userMessage);
 
-            var maxHistory = chatOptions.Value.MaxHistoryMessages;
+            // MaxHistoryMessages = prior turns from DB; the current user message is always added on top.
             var history = conversation.Messages
-                .Append(userMessage)
                 .OrderBy(m => m.CreatedAt)
-                .TakeLast(maxHistory)
+                .TakeLast(chatOptions.Value.MaxHistoryMessages)
                 .Select(ToChatMessage)
                 .ToList();
+
+            history.Add(ToChatMessage(userMessage));
 
             var messages = new List<ChatMessage>
             {
