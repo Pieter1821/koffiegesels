@@ -1,0 +1,15 @@
+---
+description: Koffiegesels project conventions (Afrikaans-first chat API on .NET 10)
+alwaysApply: true
+---
+
+# Koffiegesels conventions
+
+- **Vertical slice architecture.** Features live in `src/Koffiegesels.Api/Features/<Feature>/<Operation>/` with the endpoint and its DTOs colocated. Do not introduce shared service god-classes or technical-layer folders (Repositories/Services/Managers).
+- **AI via `IChatClient`.** Inject `Microsoft.Extensions.AI.IChatClient` in feature code. Configure the concrete provider (Azure OpenAI in prod, Ollama in dev) only in the composition root under `Shared/Ai`. Never reference `AzureOpenAIClient`/`OpenAIClient` outside that folder.
+- **One Afrikaans system prompt.** Prompt text lives in `Shared/Prompts`, versioned. The bot replies in Afrikaans by default and must qualify or decline when it does not know — never fabricate facts, sources, or statistics.
+- **Auth is mandatory.** All chat/conversation routes require Keycloak JWT. Do not add a parallel API-key auth path.
+- **Security & cost.** No secrets in the repo (use user-secrets / Key Vault). Do not log full prompt or response bodies in production. Cap `MaxTokens` per request and rate-limit per user.
+- **Scope discipline.** Do not add Semantic Kernel, Azure AI Search, RAG libraries, or agent frameworks without an explicit task.
+- **Do not commit PRDs** or planning docs (already git-ignored).
+- Database context is `KoffiegeselsContext`; add EF entity configs via `IEntityTypeConfiguration` discovered by `ApplyConfigurationsFromAssembly`.

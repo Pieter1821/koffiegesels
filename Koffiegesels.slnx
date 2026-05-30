@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Koffiegesels.Api/Koffiegesels.Api.csproj" />
+    <Project Path="src/Koffiegesels.AppHost/Koffiegesels.AppHost.csproj" />
+    <Project Path="src/Koffiegesels.ServiceDefaults/Koffiegesels.ServiceDefaults.csproj" />
+  </Folder>
+</Solution>
