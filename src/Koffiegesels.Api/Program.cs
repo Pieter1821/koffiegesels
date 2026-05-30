@@ -1,10 +1,15 @@
 using Azure.Identity;
 using Koffiegesels.Api.Data;
+using Koffiegesels.Api.Features.Conversations;
+using Koffiegesels.Api.Shared.Ai;
+using Koffiegesels.Api.Shared.Authentication;
 using Koffiegesels.Api.Shared.Cors;
+using Koffiegesels.Api.Shared.Dev;
 using Koffiegesels.Api.Shared.ErrorHandling;
 using Koffiegesels.Api.Shared.OpenApi;
-using Koffiegesels.Api.Shared.Authentication;
 using Microsoft.AspNetCore.HttpLogging;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,13 +53,29 @@ builder.AddKoffiegeselsOpenApi();
 
 builder.AddKoffiegeselsCors();
 
+builder.AddKoffiegeselsAi();
+
+builder.Services.AddOptions<DevUserOptions>()
+                .Bind(builder.Configuration.GetSection(DevUserOptions.SectionName))
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
+
+builder.Services.AddSingleton<ICurrentUser, DevCurrentUser>();
+
 builder.Services.AddValidation();
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(
+        new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+});
 
 var app = builder.Build();
 
 app.UseCors();
 
 app.MapDefaultEndpoints();
+app.MapConversations();
 
 app.UseHttpLogging();
 
