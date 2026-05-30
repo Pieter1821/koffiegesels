@@ -47,13 +47,13 @@ public static class SendMessageEndpoint
 
             dbContext.Messages.Add(userMessage);
 
+            var maxHistory = chatOptions.Value.MaxHistoryMessages;
             var history = conversation.Messages
+                .Append(userMessage)
                 .OrderBy(m => m.CreatedAt)
-                .TakeLast(chatOptions.Value.MaxHistoryMessages)
+                .TakeLast(maxHistory)
                 .Select(ToChatMessage)
                 .ToList();
-
-            history.Add(ToChatMessage(userMessage));
 
             var messages = new List<ChatMessage>
             {
@@ -123,6 +123,7 @@ public static class SendMessageEndpoint
         .WithTags("Messages")
         .Produces<SendMessageResponseDto>()
         .Produces(StatusCodes.Status404NotFound)
+        .Produces(StatusCodes.Status502BadGateway)
         .Produces(StatusCodes.Status503ServiceUnavailable)
         .ProducesValidationProblem();
     }

@@ -9,6 +9,10 @@ public class AiChatOptions
     [Range(1, 16_384)]
     public int MaxTokens { get; set; } = 1024;
 
+    /// <summary>
+    /// Maximum prior messages loaded from the database per request.
+    /// The current user message is always sent in addition (up to this count + 1).
+    /// </summary>
     [Range(1, 200)]
     public int MaxHistoryMessages { get; set; } = 40;
 }
