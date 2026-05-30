@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import { AnimatePresence } from 'motion/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Menu } from 'lucide-react'
-import type { ConversationDetail, Message, MessageWithConversation } from '@/api/types'
+import type { ConversationDetail, ConversationSummary, Message, MessageWithConversation } from '@/api/types'
 import { ApiError, streamMessage } from '@/api/client'
 import { useT } from '@/i18n'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -37,6 +37,10 @@ export function ChatApp() {
   // reveal animation is needed; kept as a stable empty set for MessageThread.
   const revealIds = useMemo(() => new Set<string>(), [])
   const streamAbortRef = useRef<AbortController | null>(null)
+  /** Prevents double-submit (e.g. double-clicking a suggested prompt). */
+  const sendLockRef = useRef(false)
+  /** When true, skip auto-selecting the most recent thread (user chose "Nuwe gesprek"). */
+  const draftModeRef = useRef(false)
 
   const conversationsQuery = useConversations()
   const conversationQuery = useConversation(selectedId)
@@ -44,10 +48,19 @@ export function ChatApp() {
   const deleteMutation = useDeleteConversation()
 
   const conversations = conversationsQuery.data ?? []
-  const messages = conversationQuery.data?.messages ?? []
+  const detail = conversationQuery.data
+  const messages =
+    selectedId && detail?.id === selectedId ? detail.messages : []
 
-  // Auto-select the most recent conversation on first load.
+  const clearStreamState = useCallback(() => {
+    setPendingUser(null)
+    setStreamingText(null)
+    setIsStreaming(false)
+  }, [])
+
+  // Auto-select the most recent conversation on first load (not after "Nuwe gesprek").
   useEffect(() => {
+    if (draftModeRef.current) return
     if (selectedId === null && conversations.length > 0) {
       setSelectedId(conversations[0].id)
     }
@@ -85,18 +98,49 @@ export function ChatApp() {
           {
             onMeta: (userMessage) => {
               realUser = userMessage
+              // Persisted user message replaces the optimistic bubble immediately.
+              setPendingUser(null)
+              queryClient.setQueryData<ConversationDetail>(
+                conversationKeys.detail(conversationId),
+                (old) => {
+                  const base: ConversationDetail = old ?? {
+                    id: conversationId,
+                    title: t('untitled'),
+                    createdAt: userMessage.createdAt,
+                    updatedAt: userMessage.createdAt,
+                    messages: [],
+                  }
+                  if (base.messages.some((m) => m.id === userMessage.id)) return base
+                  return {
+                    ...base,
+                    messages: [
+                      ...base.messages,
+                      {
+                        id: userMessage.id,
+                        role: userMessage.role,
+                        content: userMessage.content,
+                        createdAt: userMessage.createdAt,
+                      },
+                    ],
+                  }
+                },
+              )
             },
             onToken: (delta) => {
               setStreamingText((prev) => (prev ?? '') + delta)
             },
             onDone: (assistantMessage) => {
-              // Write both persisted messages into the cache and clear the
-              // streaming/optimistic state in a single batch — no flicker.
               queryClient.setQueryData<ConversationDetail>(
                 conversationKeys.detail(conversationId),
                 (old) => {
-                  if (!old) return old
-                  const next = [...old.messages]
+                  const base: ConversationDetail = old ?? {
+                    id: conversationId,
+                    title: t('untitled'),
+                    createdAt: realUser?.createdAt ?? assistantMessage.createdAt,
+                    updatedAt: assistantMessage.createdAt,
+                    messages: [],
+                  }
+                  const next = [...base.messages]
                   if (realUser && !next.some((m) => m.id === realUser!.id)) {
                     next.push({
                       id: realUser.id,
@@ -113,12 +157,22 @@ export function ChatApp() {
                       createdAt: assistantMessage.createdAt,
                     })
                   }
-                  return { ...old, messages: next }
+                  return { ...base, messages: next, updatedAt: assistantMessage.createdAt }
+                },
+              )
+              queryClient.setQueryData<ConversationSummary[]>(
+                conversationKeys.all,
+                (old) => {
+                  const list = old ?? []
+                  const idx = list.findIndex((c) => c.id === conversationId)
+                  if (idx === -1) return list
+                  const updated = { ...list[idx], updatedAt: assistantMessage.createdAt }
+                  return [updated, ...list.filter((c) => c.id !== conversationId)]
                 },
               )
               void queryClient.invalidateQueries({ queryKey: conversationKeys.all })
+              void queryClient.invalidateQueries({ queryKey: conversationKeys.detail(conversationId) })
               setStreamingText(null)
-              setPendingUser(null)
             },
           },
           controller.signal,
@@ -136,36 +190,52 @@ export function ChatApp() {
         streamAbortRef.current = null
       }
     },
-    [queryClient],
+    [queryClient, t],
+  )
+
+  const handleSelect = useCallback(
+    (id: string) => {
+      draftModeRef.current = false
+      streamAbortRef.current?.abort()
+      clearStreamState()
+      setSelectedId(id)
+    },
+    [clearStreamState],
   )
 
   const handleSend = useCallback(
     async (content: string) => {
-      let id = selectedId
-      if (!id) {
-        try {
-          const created = await createMutation.mutateAsync(undefined)
-          id = created.id
-          setSelectedId(id)
-        } catch (err) {
-          setBanner(mapError(err))
-          return
+      if (sendLockRef.current || isStreaming || createMutation.isPending) return
+      sendLockRef.current = true
+
+      try {
+        let id = selectedId
+        if (!id) {
+          try {
+            const created = await createMutation.mutateAsync(undefined)
+            id = created.id
+            draftModeRef.current = false
+            setSelectedId(id)
+          } catch (err) {
+            setBanner(mapError(err))
+            return
+          }
         }
+        await send(content, id)
+      } finally {
+        sendLockRef.current = false
       }
-      await send(content, id)
     },
-    [selectedId, createMutation, send],
+    [selectedId, createMutation, send, isStreaming],
   )
 
-  const handleNew = useCallback(async () => {
+  const handleNew = useCallback(() => {
     setBanner(null)
-    try {
-      const created = await createMutation.mutateAsync(undefined)
-      setSelectedId(created.id)
-    } catch (err) {
-      setBanner(mapError(err))
-    }
-  }, [createMutation])
+    streamAbortRef.current?.abort()
+    clearStreamState()
+    draftModeRef.current = true
+    setSelectedId(null)
+  }, [clearStreamState])
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -173,14 +243,16 @@ export function ChatApp() {
       try {
         await deleteMutation.mutateAsync(id)
         if (selectedId === id) {
-          const remaining = conversations.filter((c) => c.id !== id)
-          setSelectedId(remaining[0]?.id ?? null)
+          streamAbortRef.current?.abort()
+          clearStreamState()
+          draftModeRef.current = true
+          setSelectedId(null)
         }
       } catch (err) {
         setBanner(mapError(err))
       }
     },
-    [deleteMutation, selectedId, conversations, t],
+    [deleteMutation, selectedId, t, clearStreamState],
   )
 
   const handleRetry = useCallback(
@@ -198,8 +270,9 @@ export function ChatApp() {
 
   // "Thinking" = stream started but no token has arrived yet.
   const isThinking = isStreaming && !streamingText
+  const isBusy = isStreaming || createMutation.isPending
   const showEmpty = !selectedId || (messages.length === 0 && !pendingUser && !conversationQuery.isLoading)
-  const title = conversationQuery.data?.title ?? t('app.name')
+  const title = detail?.id === selectedId ? (detail.title || t('untitled')) : t('app.name')
 
   return (
     <div className="relative flex h-[100dvh] overflow-hidden">
@@ -216,7 +289,7 @@ export function ChatApp() {
         mobileOpen={mobileOpen}
         onToggleCollapse={() => setCollapsed((c) => !c)}
         onCloseMobile={() => setMobileOpen(false)}
-        onSelect={setSelectedId}
+        onSelect={handleSelect}
         onNew={handleNew}
         onDelete={handleDelete}
       />
@@ -250,7 +323,7 @@ export function ChatApp() {
         </AnimatePresence>
 
         {showEmpty ? (
-          <EmptyState onPick={(prompt) => void handleSend(prompt)} />
+          <EmptyState disabled={isBusy} onPick={(prompt) => void handleSend(prompt)} />
         ) : (
           <MessageThread
             messages={messages}
@@ -264,7 +337,7 @@ export function ChatApp() {
 
         <Composer
           onSend={(content) => void handleSend(content)}
-          isSending={isThinking}
+          isSending={isBusy}
           justSent={justSent}
         />
       </div>

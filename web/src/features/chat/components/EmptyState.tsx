@@ -16,7 +16,13 @@ function greetingKey(): TranslationKey {
   return 'empty.greeting.evening'
 }
 
-export function EmptyState({ onPick }: { onPick: (prompt: string) => void }) {
+export function EmptyState({
+  onPick,
+  disabled,
+}: {
+  onPick: (prompt: string) => void
+  disabled?: boolean
+}) {
   const t = useT()
   const reduce = useReducedMotion()
 
@@ -46,12 +52,13 @@ export function EmptyState({ onPick }: { onPick: (prompt: string) => void }) {
             <motion.button
               key={s.title}
               type="button"
+              disabled={disabled}
               onClick={() => onPick(t(s.prompt))}
               initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.18 + i * 0.07, ease: [0.2, 0, 0, 1] }}
-              whileHover={reduce ? undefined : { y: -3 }}
-              className="group flex items-start justify-between gap-3 rounded-2xl border border-border bg-surface/70 p-4 text-left shadow-e1 backdrop-blur-sm transition-colors hover:border-accent hover:shadow-gloed"
+              whileHover={reduce || disabled ? undefined : { y: -3 }}
+              className="group flex items-start justify-between gap-3 rounded-2xl border border-border bg-surface/70 p-4 text-left shadow-e1 backdrop-blur-sm transition-colors hover:border-accent hover:shadow-gloed disabled:pointer-events-none disabled:opacity-50"
             >
               <span>
                 <span className="block text-sm font-semibold text-foreground">{t(s.title)}</span>
