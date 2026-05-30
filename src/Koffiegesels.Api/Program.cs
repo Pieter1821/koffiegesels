@@ -5,6 +5,7 @@ using Koffiegesels.Api.Shared.Ai;
 using Koffiegesels.Api.Shared.Authentication;
 using Koffiegesels.Api.Shared.Cors;
 using Koffiegesels.Api.Shared.ErrorHandling;
+using Koffiegesels.Api.Shared.Guardrails;
 using Koffiegesels.Api.Shared.OpenApi;
 using Microsoft.AspNetCore.HttpLogging;
 using System.Text.Json;
@@ -54,6 +55,8 @@ builder.AddKoffiegeselsCors();
 
 builder.AddKoffiegeselsAi();
 
+builder.AddKoffiegeselsGuardrails();
+
 // Real authenticated user, resolved per-request from the JWT 'sub' claim.
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
@@ -86,6 +89,8 @@ else
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseRateLimiter();
 
 app.UseStatusCodePages();
 

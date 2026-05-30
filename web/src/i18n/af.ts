@@ -24,6 +24,7 @@ export const af = {
   'composer.send': 'Stuur',
   'composer.stop': 'Stop genereer',
   'composer.hint': 'Enter om te stuur · Shift+Enter vir nuwe reël',
+  'composer.hintStop': 'Klik stop om te staak · Enter om te stuur',
 
   'message.you': 'Jy',
   'message.assistant': 'Koffiegesels',

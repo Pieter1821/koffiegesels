@@ -7,6 +7,7 @@ using Koffiegesels.Api.Features.Messages;
 using Koffiegesels.Api.Features.Messages.SendMessage;
 using Koffiegesels.Api.Shared.Ai;
 using Koffiegesels.Api.Shared.Authentication;
+using Koffiegesels.Api.Shared.Guardrails;
 using Koffiegesels.Api.Shared.Prompts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -24,7 +25,6 @@ namespace Koffiegesels.Api.Features.Messages.StreamMessage;
 /// </summary>
 public static class StreamMessageEndpoint
 {
-    // Web defaults = camelCase, matching the JSON endpoints and the frontend types.
     private static readonly JsonSerializerOptions SseJson = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
@@ -40,9 +40,28 @@ public static class StreamMessageEndpoint
             ICurrentUser currentUser,
             IChatClient chatClient,
             IOptions<AiChatOptions> chatOptions,
+            IOptions<GuardrailsOptions> guardrailsOptions,
             ILogger<Program> logger,
             CancellationToken cancellationToken) =>
         {
+            var trimmed = request.Content.Trim();
+
+            if (AiRequestGuards.RejectUnsafeContent(trimmed) is { } unsafeResult)
+            {
+                await unsafeResult.ExecuteAsync(httpContext);
+                return;
+            }
+
+            if (await AiRequestGuards.RejectOverDailyCapAsync(
+                    dbContext,
+                    currentUser.UserId,
+                    guardrailsOptions.Value,
+                    cancellationToken) is { } capResult)
+            {
+                await capResult.ExecuteAsync(httpContext);
+                return;
+            }
+
             var conversation = await dbContext.Conversations
                 .Include(c => c.Messages)
                 .FirstOrDefaultAsync(
@@ -55,33 +74,24 @@ public static class StreamMessageEndpoint
                 return;
             }
 
-            // Bounded prior context, materialised before we persist the new user message.
-            var history = conversation.Messages
-                .OrderBy(m => m.CreatedAt)
-                .TakeLast(chatOptions.Value.MaxHistoryMessages)
-                .Select(ToChatMessage)
-                .ToList();
-
             var now = DateTimeOffset.UtcNow;
             var userMessage = new Message
             {
                 Id = Guid.NewGuid(),
                 ConversationId = conversation.Id,
                 Role = MessageRole.User,
-                Content = request.Content.Trim(),
+                Content = trimmed,
                 CreatedAt = now,
             };
 
             dbContext.Messages.Add(userMessage);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            history.Add(ToChatMessage(userMessage));
-
-            var prompt = new List<ChatMessage>
-            {
-                new(ChatRole.System, KoffiegeselsPrompts.System),
-            };
-            prompt.AddRange(history);
+            var prompt = ChatPromptBuilder.Build(
+                conversation,
+                userMessage,
+                chatOptions.Value,
+                guardrailsOptions.Value);
 
             httpContext.Response.Headers.ContentType = "text/event-stream";
             httpContext.Response.Headers.CacheControl = "no-cache";
@@ -117,7 +127,6 @@ public static class StreamMessageEndpoint
             }
             catch (OperationCanceledException)
             {
-                // Client disconnected; the user message is already persisted.
                 return;
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
@@ -151,6 +160,7 @@ public static class StreamMessageEndpoint
                 Role = MessageRole.Assistant,
                 Content = assistantText,
                 CreatedAt = DateTimeOffset.UtcNow,
+                TokenCount = UserUsageLimits.EstimateTokens(assistantText),
             };
 
             dbContext.Messages.Add(assistantMessage);
@@ -166,21 +176,13 @@ public static class StreamMessageEndpoint
         })
         .WithName("StreamMessage")
         .WithTags("Messages")
+        .RequireRateLimiting(GuardrailsExtensions.ChatRateLimitPolicy)
         .Produces(StatusCodes.Status200OK, contentType: "text/event-stream")
+        .Produces(StatusCodes.Status400BadRequest)
         .Produces(StatusCodes.Status404NotFound)
+        .Produces(StatusCodes.Status429TooManyRequests)
         .ProducesValidationProblem();
     }
-
-    private static ChatMessage ToChatMessage(Message message) =>
-        new(ToChatRole(message.Role), message.Content);
-
-    private static ChatRole ToChatRole(MessageRole role) => role switch
-    {
-        MessageRole.User => ChatRole.User,
-        MessageRole.Assistant => ChatRole.Assistant,
-        MessageRole.System => ChatRole.System,
-        _ => ChatRole.User,
-    };
 
     private static MessageResponseDto ToDto(Message message) =>
         new(message.Id, message.ConversationId, message.Role, message.Content, message.CreatedAt);

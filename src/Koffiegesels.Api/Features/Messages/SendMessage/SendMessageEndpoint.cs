@@ -3,6 +3,7 @@ using Koffiegesels.Api.Features.Conversations;
 using Koffiegesels.Api.Features.Messages;
 using Koffiegesels.Api.Shared.Ai;
 using Koffiegesels.Api.Shared.Authentication;
+using Koffiegesels.Api.Shared.Guardrails;
 using Koffiegesels.Api.Shared.Prompts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -21,9 +22,26 @@ public static class SendMessageEndpoint
             ICurrentUser currentUser,
             IChatClient chatClient,
             IOptions<AiChatOptions> chatOptions,
+            IOptions<GuardrailsOptions> guardrailsOptions,
             ILogger<Program> logger,
             CancellationToken cancellationToken) =>
         {
+            var trimmed = request.Content.Trim();
+
+            if (AiRequestGuards.RejectUnsafeContent(trimmed) is { } unsafeResult)
+            {
+                return unsafeResult;
+            }
+
+            if (await AiRequestGuards.RejectOverDailyCapAsync(
+                    dbContext,
+                    currentUser.UserId,
+                    guardrailsOptions.Value,
+                    cancellationToken) is { } capResult)
+            {
+                return capResult;
+            }
+
             var conversation = await dbContext.Conversations
                 .Include(c => c.Messages)
                 .FirstOrDefaultAsync(
@@ -41,36 +59,24 @@ public static class SendMessageEndpoint
                 Id = Guid.NewGuid(),
                 ConversationId = conversation.Id,
                 Role = MessageRole.User,
-                Content = request.Content.Trim(),
+                Content = trimmed,
                 CreatedAt = now,
             };
 
             dbContext.Messages.Add(userMessage);
 
-            // MaxHistoryMessages = prior turns from DB; the current user message is always added on top.
-            var history = conversation.Messages
-                .OrderBy(m => m.CreatedAt)
-                .TakeLast(chatOptions.Value.MaxHistoryMessages)
-                .Select(ToChatMessage)
-                .ToList();
-
-            history.Add(ToChatMessage(userMessage));
-
-            var messages = new List<ChatMessage>
-            {
-                new(ChatRole.System, KoffiegeselsPrompts.System),
-            };
-            messages.AddRange(history);
+            var messages = ChatPromptBuilder.Build(
+                conversation,
+                userMessage,
+                chatOptions.Value,
+                guardrailsOptions.Value);
 
             ChatResponse aiResponse;
             try
             {
                 aiResponse = await chatClient.GetResponseAsync(
                     messages,
-                    new ChatOptions
-                    {
-                        MaxOutputTokens = chatOptions.Value.MaxTokens,
-                    },
+                    new ChatOptions { MaxOutputTokens = chatOptions.Value.MaxTokens },
                     cancellationToken);
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
@@ -104,7 +110,7 @@ public static class SendMessageEndpoint
                 CreatedAt = DateTimeOffset.UtcNow,
                 TokenCount = aiResponse.Usage?.OutputTokenCount is long outputTokens
                     ? (int)Math.Min(outputTokens, int.MaxValue)
-                    : null,
+                    : UserUsageLimits.EstimateTokens(assistantText),
             };
 
             dbContext.Messages.Add(assistantMessage);
@@ -122,23 +128,15 @@ public static class SendMessageEndpoint
         })
         .WithName("SendMessage")
         .WithTags("Messages")
+        .RequireRateLimiting(GuardrailsExtensions.ChatRateLimitPolicy)
         .Produces<SendMessageResponseDto>()
+        .Produces(StatusCodes.Status400BadRequest)
         .Produces(StatusCodes.Status404NotFound)
+        .Produces(StatusCodes.Status429TooManyRequests)
         .Produces(StatusCodes.Status502BadGateway)
         .Produces(StatusCodes.Status503ServiceUnavailable)
         .ProducesValidationProblem();
     }
-
-    private static ChatMessage ToChatMessage(Message message) =>
-        new(ToChatRole(message.Role), message.Content);
-
-    private static ChatRole ToChatRole(MessageRole role) => role switch
-    {
-        MessageRole.User => ChatRole.User,
-        MessageRole.Assistant => ChatRole.Assistant,
-        MessageRole.System => ChatRole.System,
-        _ => ChatRole.User,
-    };
 
     private static MessageResponseDto ToDto(Message message) =>
         new(message.Id, message.ConversationId, message.Role, message.Content, message.CreatedAt);
