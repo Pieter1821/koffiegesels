@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react'
+import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { af, type TranslationKey } from './af'
 
 type Vars = Record<string, string | number>

@@ -5,7 +5,7 @@ import {
   getConversation,
   listConversations,
   sendMessage,
-} from '../../../api/client'
+} from '@/api/client'
 
 export const conversationKeys = {
   all: ['conversations'] as const,
@@ -29,18 +29,14 @@ export function useConversation(id: string | null) {
 
 export function useCreateConversation() {
   const queryClient = useQueryClient()
-
   return useMutation({
     mutationFn: (title?: string) => createConversation(title),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: conversationKeys.all })
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: conversationKeys.all }),
   })
 }
 
 export function useDeleteConversation() {
   const queryClient = useQueryClient()
-
   return useMutation({
     mutationFn: (id: string) => deleteConversation(id),
     onSuccess: (_data, id) => {
@@ -50,15 +46,22 @@ export function useDeleteConversation() {
   })
 }
 
-export function useSendMessage(conversationId: string | null) {
-  const queryClient = useQueryClient()
+export interface SendVars {
+  conversationId: string
+  content: string
+}
 
+export function useSendMessage() {
+  const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (content: string) => sendMessage(conversationId!, content),
-    onSuccess: (_data, _content, _context) => {
-      if (!conversationId) return
-      void queryClient.invalidateQueries({ queryKey: conversationKeys.detail(conversationId) })
-      void queryClient.invalidateQueries({ queryKey: conversationKeys.all })
+    mutationFn: ({ conversationId, content }: SendVars) => sendMessage(conversationId, content),
+    // Await the refetch so callers can clear optimistic state only once the
+    // real user + assistant messages are in the cache.
+    onSuccess: async (_data, { conversationId }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: conversationKeys.detail(conversationId) }),
+        queryClient.invalidateQueries({ queryKey: conversationKeys.all }),
+      ])
     },
   })
 }

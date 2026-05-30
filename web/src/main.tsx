@@ -1,8 +1,13 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { AuthProvider } from 'react-oidc-context'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { oidcConfig, onSigninCallback } from './auth/authConfig'
+
+import '@fontsource-variable/fraunces'
+import '@fontsource-variable/inter'
+import '@fontsource-variable/jetbrains-mono'
+
+import { ThemeProvider } from './theme/ThemeProvider'
+import { I18nProvider } from './i18n'
 import App from './App.tsx'
 import './index.css'
 
@@ -16,12 +21,13 @@ const queryClient = new QueryClient({
 })
 
 createRoot(document.getElementById('root')!).render(
-  // AuthProvider must sit outside StrictMode — double mount breaks PKCE callback state.
-  <AuthProvider {...oidcConfig} onSigninCallback={onSigninCallback}>
-    <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    </StrictMode>
-  </AuthProvider>,
+  <StrictMode>
+    <ThemeProvider>
+      <I18nProvider locale="af">
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      </I18nProvider>
+    </ThemeProvider>
+  </StrictMode>,
 )
