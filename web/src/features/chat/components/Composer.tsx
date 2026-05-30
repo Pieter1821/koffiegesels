@@ -7,13 +7,14 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { ArrowUp, Check, Loader2 } from 'lucide-react'
+import { ArrowUp, Check, Loader2, Square } from 'lucide-react'
 import { useT } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { MagneticButton } from '@/components/ui/MagneticButton'
 
 interface ComposerProps {
   onSend: (content: string) => void
+  onStop?: () => void
   isSending: boolean
   disabled?: boolean
   justSent?: boolean
@@ -26,7 +27,7 @@ const ROTATING_KEYS = [
   'composer.placeholderRotating.3',
 ] as const
 
-export function Composer({ onSend, isSending, disabled, justSent }: ComposerProps) {
+export function Composer({ onSend, onStop, isSending, disabled, justSent }: ComposerProps) {
   const t = useT()
   const reduce = useReducedMotion()
   const [value, setValue] = useState('')
@@ -72,6 +73,7 @@ export function Composer({ onSend, isSending, disabled, justSent }: ComposerProp
   }
 
   const canSend = value.trim().length > 0 && !isSending && !disabled
+  const showStop = isSending && !!onStop
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-5 pt-2 sm:px-6">
@@ -117,16 +119,21 @@ export function Composer({ onSend, isSending, disabled, justSent }: ComposerProp
         </div>
 
         <MagneticButton
-          type="submit"
-          ariaLabel={t('composer.send')}
-          disabled={!canSend && !isSending}
+          type={showStop ? 'button' : 'submit'}
+          ariaLabel={showStop ? t('composer.stop') : t('composer.send')}
+          onClick={showStop ? onStop : undefined}
+          disabled={showStop ? false : !canSend}
           className={cn(
             'mb-0.5 h-10 w-10 shrink-0 rounded-full text-accent-foreground shadow-e1',
             canSend || isSending ? 'bg-accent hover:bg-accent-hover' : 'bg-border-strong text-surface',
           )}
         >
           <AnimatePresence mode="wait" initial={false}>
-            {isSending ? (
+            {showStop ? (
+              <motion.span key="stop" initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+                <Square className="h-[1.05rem] w-[1.05rem] fill-current" />
+              </motion.span>
+            ) : isSending ? (
               <motion.span key="load" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <Loader2 className="h-[1.1rem] w-[1.1rem] animate-spin" />
               </motion.span>
@@ -143,7 +150,9 @@ export function Composer({ onSend, isSending, disabled, justSent }: ComposerProp
         </MagneticButton>
       </form>
 
-      <p className="mt-2 text-center text-xs text-muted-2">{t('composer.hint')}</p>
+      <p className="mt-2 text-center text-xs text-muted-2">
+        {showStop ? t('composer.hintStop') : t('composer.hint')}
+      </p>
     </div>
   )
 }

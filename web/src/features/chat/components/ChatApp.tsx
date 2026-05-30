@@ -180,9 +180,11 @@ export function ChatApp() {
         setJustSent(true)
         setTimeout(() => setJustSent(false), 1500)
       } catch (err) {
-        if (!(err instanceof DOMException && err.name === 'AbortError')) {
-          setBanner(mapError(err))
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          void queryClient.invalidateQueries({ queryKey: conversationKeys.detail(conversationId) })
+          return
         }
+        setBanner(mapError(err))
       } finally {
         setStreamingText(null)
         setPendingUser(null)
@@ -228,6 +230,10 @@ export function ChatApp() {
     },
     [selectedId, createMutation, send, isStreaming],
   )
+
+  const handleStop = useCallback(() => {
+    streamAbortRef.current?.abort()
+  }, [])
 
   const handleNew = useCallback(() => {
     setBanner(null)
@@ -337,6 +343,7 @@ export function ChatApp() {
 
         <Composer
           onSend={(content) => void handleSend(content)}
+          onStop={isStreaming ? handleStop : undefined}
           isSending={isBusy}
           justSent={justSent}
         />
