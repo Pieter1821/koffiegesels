@@ -127,7 +127,8 @@ The `/send` endpoint returns `{ "userMessage", "assistantMessage" }`. It may res
 | `Ollama:Model` | `appsettings.json` / user-secrets | e.g. `phi4-mini:latest`, `qwen2.5:7b` |
 | `Chat:MaxTokens` | `appsettings.json` | Cap per AI request |
 | `Chat:MaxHistoryMessages` | `appsettings.json` | Prior messages sent as context |
-| `DevUser:UserId` | `appsettings.json` | Stub owner for all conversations (dev) |
+| `Auth:Authority` | AppHost env / config | Keycloak realm URL (injected by Aspire in run mode) |
+| `Auth:Audience` | `appsettings.json` | Expected token audience (`koffiegesels-api`) |
 | `AzureOpenAI:*` | user-secrets / Azure | Production inference (not wired yet) |
 | `VITE_API_PROXY_TARGET` | `web/.env.local` | API URL for Vite dev proxy |
 | `VITE_OIDC_*` | `web/.env.local` | Keycloak for frontend login (Phase 6) |
@@ -136,9 +137,9 @@ Do not commit secrets. Use `dotnet user-secrets` locally and Key Vault in Azure.
 
 ## Auth status
 
-Conversation routes currently use a **dev user stub** (`DevUser:UserId` → `dev-local-user`). JWT middleware is registered but **not enforced** on routes yet — this is intentional so the chat loop can be built and tested without Keycloak friction.
+All conversation routes are **protected by Keycloak JWT** (`/conversations` group has `RequireAuthorization()`). Unauthenticated calls get `401`. The owning user is the token's `sub` claim (`ICurrentUser` → `CurrentUser`), and every query is scoped to that user. The frontend gates the UI behind an OIDC sign-in (`react-oidc-context`, PKCE) and attaches the Bearer token to all API + SSE calls.
 
-Keycloak is still orchestrated by Aspire for when auth is enabled:
+Keycloak is orchestrated by Aspire:
 
 | Purpose | Credentials |
 |---------|-------------|
@@ -156,7 +157,7 @@ Realm export: `src/Koffiegesels.AppHost/realms/koffiegesels-realm.json`
 │   │   │   ├── Conversations/      # CRUD + entities
 │   │   │   └── Messages/           # AddMessage, SendMessage (AI)
 │   │   ├── Data/                   # KoffiegeselsContext, migrations
-│   │   └── Shared/                 # Ai, Prompts, Dev, Cors, Auth, OpenApi
+│   │   └── Shared/                 # Ai, Prompts, Cors, Authentication, OpenApi
 │   ├── Koffiegesels.AppHost/       # Aspire orchestration
 │   └── Koffiegesels.ServiceDefaults/
 ├── web/                            # React + Vite frontend

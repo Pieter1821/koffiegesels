@@ -1,5 +1,5 @@
 using Koffiegesels.Api.Data;
-using Koffiegesels.Api.Shared.Dev;
+using Koffiegesels.Api.Shared.Authentication;
 using Microsoft.EntityFrameworkCore;
 
 namespace Koffiegesels.Api.Features.Conversations.DeleteConversation;

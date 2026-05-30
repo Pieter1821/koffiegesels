@@ -6,7 +6,7 @@ using Koffiegesels.Api.Features.Conversations;
 using Koffiegesels.Api.Features.Messages;
 using Koffiegesels.Api.Features.Messages.SendMessage;
 using Koffiegesels.Api.Shared.Ai;
-using Koffiegesels.Api.Shared.Dev;
+using Koffiegesels.Api.Shared.Authentication;
 using Koffiegesels.Api.Shared.Prompts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;

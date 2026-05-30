@@ -1,7 +1,7 @@
 using Koffiegesels.Api.Data;
 using Koffiegesels.Api.Features.Conversations;
 using Koffiegesels.Api.Features.Messages;
-using Koffiegesels.Api.Shared.Dev;
+using Koffiegesels.Api.Shared.Authentication;
 using Microsoft.EntityFrameworkCore;
 
 namespace Koffiegesels.Api.Features.Messages.AddMessage;

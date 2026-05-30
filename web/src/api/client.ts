@@ -5,8 +5,15 @@ import type {
   SendMessageResult,
 } from './types'
 import { readEventStream } from './stream'
+import { getAccessToken, notifyUnauthorized } from '@/auth/token'
 
 const apiBase = import.meta.env.VITE_API_BASE ?? '/api'
+
+/** Authorization header for the current OIDC session, or `{}` if signed out. */
+function authHeader(): Record<string, string> {
+  const token = getAccessToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 export class ApiError extends Error {
   readonly status: number
@@ -24,18 +31,20 @@ function buildUrl(path: string): string {
   return `${apiBase}${path.startsWith('/') ? path : `/${path}`}`
 }
 
-/** JSON request to the backend via Vite proxy (dev) or ingress (prod). No auth during Phase 4. */
+/** JSON request to the backend via Vite proxy (dev) or ingress (prod). Carries the OIDC Bearer token. */
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(buildUrl(path), {
     ...init,
     headers: {
       Accept: 'application/json',
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...authHeader(),
       ...init?.headers,
     },
   })
 
   if (!response.ok) {
+    if (response.status === 401) notifyUnauthorized()
     const body = await response.text().catch(() => undefined)
     throw new ApiError(`API ${response.status}: ${response.statusText}`, response.status, body)
   }
@@ -99,11 +108,13 @@ export async function streamMessage(
     headers: {
       Accept: 'text/event-stream',
       'Content-Type': 'application/json',
+      ...authHeader(),
     },
     body: JSON.stringify({ content }),
   })
 
   if (!response.ok) {
+    if (response.status === 401) notifyUnauthorized()
     const body = await response.text().catch(() => undefined)
     throw new ApiError(`API ${response.status}: ${response.statusText}`, response.status, body)
   }
@@ -132,19 +143,4 @@ export async function streamMessage(
   if (streamError) {
     throw streamError
   }
-}
-
-/** Authenticated variant for Phase 6 — reintroduce Bearer token here. */
-export async function apiFetchAuthenticated(
-  path: string,
-  accessToken: string,
-  init?: RequestInit,
-): Promise<Response> {
-  return apiFetch(path, {
-    ...init,
-    headers: {
-      ...init?.headers,
-      Authorization: `Bearer ${accessToken}`,
-    },
-  })
 }

@@ -13,7 +13,8 @@ public static class ConversationsEndpoints
     public static void MapConversations(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/conversations")
-                       .WithTags("Conversations");
+                       .WithTags("Conversations")
+                       .RequireAuthorization();
 
         group.MapCreateConversation();
         group.MapListConversations();

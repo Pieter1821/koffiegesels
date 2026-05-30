@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { Coffee, PanelLeftClose, PanelLeft, Plus, Trash2 } from 'lucide-react'
+import { Coffee, LogOut, PanelLeftClose, PanelLeft, Plus, Trash2 } from 'lucide-react'
+import { useAuth } from 'react-oidc-context'
 import type { ConversationSummary } from '@/api/types'
 import { useT } from '@/i18n'
 import { formatListStamp } from '@/i18n/format'
@@ -121,6 +122,35 @@ function SidebarBody({
           })}
         </ul>
       </nav>
+
+      <UserFooter />
+    </div>
+  )
+}
+
+function UserFooter() {
+  const t = useT()
+  const auth = useAuth()
+  const profile = auth.user?.profile
+  const name = profile?.preferred_username ?? profile?.name ?? profile?.email ?? ''
+  const initial = name.trim().charAt(0).toUpperCase() || '·'
+
+  return (
+    <div className="flex items-center gap-2 border-t border-border px-3 py-3">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
+        {initial}
+      </span>
+      <span className="line-clamp-1 min-w-0 flex-1 text-sm text-foreground">{name}</span>
+      <Tooltip label={t('auth.signOut')} side="top">
+        <button
+          type="button"
+          onClick={() => void auth.signoutRedirect()}
+          aria-label={t('auth.signOut')}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted-2 transition-colors hover:bg-danger-soft hover:text-danger"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
+      </Tooltip>
     </div>
   )
 }

@@ -66,6 +66,15 @@ export const af = {
   'theme.toDark': 'Skakel na donker',
   'theme.system': 'Volg stelsel',
 
+  'auth.loading': 'Besig om aan te meld…',
+  'auth.welcome': 'Welkom by Koffiegesels',
+  'auth.signInBody': 'Meld aan om jou gesprekke te sien en voort te gaan.',
+  'auth.signIn': 'Meld aan',
+  'auth.signOut': 'Meld af',
+  'auth.error.title': 'Aanmelding het misluk',
+  'auth.error.body': 'Kon nie by die aanmelddiens uitkom nie. Loop Keycloak?',
+  'auth.retry': 'Probeer weer',
+
   'untitled': 'Naamlose gesprek',
 } as const
 
