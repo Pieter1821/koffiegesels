@@ -73,12 +73,6 @@ var app = builder.Build();
 
 app.UseCors();
 
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapDefaultEndpoints();
-app.MapConversations();
-
 app.UseHttpLogging();
 
 if (app.Environment.IsDevelopment())
@@ -90,7 +84,13 @@ else
     app.UseExceptionHandler();
 }
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.UseStatusCodePages();
+
+app.MapDefaultEndpoints();
+app.MapConversations();
 
 await app.MigrateDbAsync();
 

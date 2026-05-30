@@ -31,8 +31,7 @@ export function TextGenerateEffect({
     )
     controls.then(() => onSettled?.())
     return () => controls.stop()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, reduce])
+  }, [text, reduce, animate, onSettled])
 
   if (reduce) {
     return <span className={className}>{text}</span>
