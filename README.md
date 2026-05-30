@@ -1,308 +1,174 @@
-# .NET Backend Blueprint
-A comprehensive .NET 10 backend template using Aspire for local development and deployment to Azure. This template provides a modern, cloud-ready API with authentication, authorization and database integration.
+# Koffiegesels
 
-**Video Walkthrough**: [Watch the full tutorial on YouTube](https://youtu.be/EfKC_9I1YiM)
+Afrikaans-first chat API and web app. Built on .NET 10 with Aspire, PostgreSQL, and Keycloak (auth wired for later). Local development uses [Ollama](https://ollama.com) for zero-cost inference; production targets Azure OpenAI.
 
 ## Overview
 
-This template includes:
-
-- **.NET 10 Web API** with Entity Framework Core and PostgreSQL
-- **Vertical Slice Architecture** with feature-based organization
-- **Keycloak authentication** for JWT-based security
-- **Global error handling** for consistent API responses
-- **Aspire** orchestration for local development
-- **Azure Container Apps** deployment ready
-- **CI/CD pipeline** for GitHub Actions
+- **Backend** — .NET 10 Web API, Entity Framework Core, PostgreSQL, vertical slice architecture
+- **AI** — `Microsoft.Extensions.AI` with Ollama locally (`phi4-mini` by default); Azure OpenAI in production
+- **Frontend** — React 19, TypeScript, Vite (chat UI in progress)
+- **Orchestration** — Aspire AppHost (API, Postgres, Keycloak, pgAdmin)
+- **Auth** — Keycloak realm included; JWT enforcement deferred until the chat loop is complete (see [Auth status](#auth-status))
 
 ## Prerequisites
 
-Before getting started, ensure you have the following tools installed:
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) — Postgres and Keycloak
+- [Aspire CLI](https://learn.microsoft.com/dotnet/aspire/cli/install) — optional; `dotnet run` works too
+- [Node.js](https://nodejs.org/) — for the Vite frontend
+- [Ollama](https://ollama.com) — for local AI replies (`ollama pull phi4-mini` or another model)
 
-- **[.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)** - The latest .NET SDK
-- **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** - For containerized services (PostgreSQL, Keycloak)
-- **[Aspire CLI](https://learn.microsoft.com/dotnet/aspire/cli/install)** - To run the application locally and deploy to Azure
+## Getting started
 
-## Getting Started
+### Backend
 
-### Running the Project Locally
+From the repo root:
 
-1. **Navigate to the root directory** of the project
-2. **Run the application** using Aspire:
-   ```bash
-   dotnet run --project src/TemplateApp.AppHost
-   ```
-   Or alternatively:
-   ```bash
-   aspire run
-   ```
+```bash
+dotnet build Koffiegesels.slnx
+dotnet run --project src/Koffiegesels.AppHost
+```
 
-3. **Access the Aspire Dashboard** using the URL provided in the terminal output
+Or:
 
-### Testing the API
+```bash
+aspire run
+```
 
-Once the application is running, you can test the API using:
+Use the Aspire dashboard URL from the terminal. The API is typically at `http://localhost:5082`. Swagger is available via **API Docs** on the dashboard in Development.
 
-- **Swagger UI**: Access it from the Aspire Dashboard by clicking the **API Docs** link for the API service
-- **Aspire Dashboard**: Monitor application health, logs, and metrics through the dashboard
+Database migrations run automatically on startup.
 
-### Authentication with Keycloak
+### Frontend
 
-The template uses Keycloak for authentication. Once the application is running:
+In a second terminal:
 
-#### Testing API with Swagger UI
+```bash
+cd web
+cp .env.example .env.local   # once
+npm install
+npm run dev                  # http://localhost:5173
+```
 
-1. **Access Swagger UI** from the Aspire Dashboard by clicking the **API Docs** link
-2. **Click the "Authorize" button** in the Swagger UI interface
-3. **Complete the OAuth2 flow**:
-   - You'll be redirected to the Keycloak login page
-   - **Login with**: `demo` / `demo`
-   - After successful authentication, you'll be redirected back to Swagger UI
-4. **Test API endpoints**: You can now use all API endpoints in Swagger UI with the obtained access token
+The browser calls `/api`, which Vite proxies to the .NET API (`VITE_API_PROXY_TARGET` in `.env.local`).
 
-#### Managing Keycloak (Admin Access)
+### Ollama
 
-If you need to manage Keycloak realm, clients, scopes, or users:
+Ensure Ollama is running and reachable:
 
-1. **Access Keycloak Admin Console** from the Aspire Dashboard by clicking on the Keycloak service endpoint
-2. **Login with admin credentials**:
-   - **Username**: `admin`
-   - **Password**: `admin`
-3. From here you can:
-   - Create additional users
-   - Configure client scopes
-   - Manage roles and permissions
-   - Adjust authentication flows
+```powershell
+curl.exe http://localhost:11434
+ollama list
+```
 
-#### Exporting Keycloak Realm
+Default model is set in `src/Koffiegesels.Api/appsettings.json` (`Ollama:Model`). Override via user-secrets if needed:
 
-To export the Keycloak realm configuration (useful for backup or version control):
+```bash
+dotnet user-secrets set "Ollama:Model" "phi4-mini:latest" --project src/Koffiegesels.Api
+```
 
-1. **Find the Keycloak volume name** assigned by Aspire:
-   ```bash
-   docker volume ls
-   ```
-   Look for a volume name similar to `templateapp.apphost-<hash>-keycloak-data`
+## Testing the API
 
-2. **Stop the running Keycloak container** (if any):
-   ```bash
-   docker ps
-   ```
-   Find the Keycloak container ID, then stop it:
-   ```bash
-   docker stop <keycloak-container-id>
-   ```
+### Smoke test (recommended)
 
-3. **Run the export command** (replace `<keycloak-volume-name>` with the actual volume name):
-   ```bash
-   docker run --rm -v <keycloak-volume-name>:/opt/keycloak/data -v "${PWD}\kc-export:/export" -e KC_DB=dev-file quay.io/keycloak/keycloak:26.4 export --realm templateapp --dir /export --users realm_file
-   ```
+Runs create → list → send (AI) → get in one command:
 
-4. The exported realm configuration will be saved to the `kc-export` directory in your project root
+```powershell
+./scripts/smoke-test.ps1
+```
 
-## Azure Deployment
+Optional parameters:
 
-### Deploy with Aspire
+```powershell
+./scripts/smoke-test.ps1 -BaseUrl "http://localhost:5082" -Message "Hallo, wie is jy?"
+```
 
-1. **Deploy to Azure**:
-   ```bash
-   aspire deploy
-   ```
+The first AI call can take 15–30 seconds while Ollama loads the model.
 
-2. Follow the prompts to:
-   - Select your Azure subscription
-   - Choose a deployment region
-   - Provide environment-specific configuration
+### Swagger
 
-The deployment will provision:
-- Azure Container Apps Environment
-- Azure Container Apps for the API backend
-- Azure Container Apps for Keycloak
-- PostgreSQL Flexible Server
-- Container Registry
-- Managed Identity
-- All necessary networking and security configurations
+Open **API Docs** from the Aspire dashboard. No OAuth is required for conversation routes during local development.
 
-### Post-Deployment Configuration
+## API endpoints
 
-After the deployment completes, you need to configure Keycloak for your Azure environment:
+| Method | Route | Description |
+|--------|-------|-------------|
+| `POST` | `/conversations` | Create a conversation (`{ "title": "..." }`) |
+| `GET` | `/conversations` | List conversations (newest first) |
+| `GET` | `/conversations/{id}` | Get conversation with messages |
+| `DELETE` | `/conversations/{id}` | Delete conversation and messages |
+| `POST` | `/conversations/{id}/messages` | Add a user message only (no AI) |
+| `POST` | `/conversations/{id}/send` | Add user message, call AI, persist assistant reply |
 
-#### 1. Import the Realm Configuration
+The `/send` endpoint returns `{ "userMessage", "assistantMessage" }`. It may respond with `502`/`503` if Ollama is down or overloaded.
 
-1. **Access your deployed Keycloak instance** using the URL provided in the Azure Container Apps
-2. **Login to the Admin Console**:
-   - **Username**: `admin`
-   - **Password**: Check your Azure Key Vault or deployment outputs for the admin password
-3. **Import the realm**:
-   - Navigate to the realm dropdown in the top-left corner
-   - Click **Create Realm**
-   - Click **Browse** and select `src/TemplateApp.AppHost/realms/templateapp-realm.json`
-   - Click **Create** to import the realm
+## Configuration
 
-### Testing the API with Postman
+| Setting | Location | Notes |
+|---------|----------|-------|
+| `Ollama:Endpoint` | `appsettings.json` | Default `http://localhost:11434` |
+| `Ollama:Model` | `appsettings.json` / user-secrets | e.g. `phi4-mini:latest` |
+| `Chat:MaxTokens` | `appsettings.json` | Cap per AI request |
+| `Chat:MaxHistoryMessages` | `appsettings.json` | Prior messages sent as context |
+| `DevUser:UserId` | `appsettings.json` | Stub owner for all conversations (dev) |
+| `AzureOpenAI:*` | user-secrets / Azure | Production inference (not wired yet) |
+| `VITE_API_PROXY_TARGET` | `web/.env.local` | API URL for Vite dev proxy |
+| `VITE_OIDC_*` | `web/.env.local` | Keycloak for frontend login (Phase 6) |
 
-A Postman collection is included at [src/TemplateApp.Api/postman_collection.json](src/TemplateApp.Api/postman_collection.json) for testing the API, both locally and on Azure.
+Do not commit secrets. Use `dotnet user-secrets` locally and Key Vault in Azure.
 
-#### Setting up Postman
+## Auth status
 
-1. **Import the collection**:
-   - Open Postman
-   - Click **Import** and select `src/TemplateApp.Api/postman_collection.json`
+Conversation routes currently use a **dev user stub** (`DevUser:UserId` → `dev-local-user`). JWT middleware is registered but **not enforced** on routes yet — this is intentional so the chat loop can be built and tested without Keycloak friction.
 
-2. **Configure collection variables**:
-   - Right-click the imported collection and select **Edit**
-   - Navigate to the **Variables** tab
-   - For **local testing**, the default values should work (check the current values)
-   - For **Azure testing**, update:
-     - `baseUrl` with your deployed API endpoint (e.g., `https://your-api.azurecontainerapps.io`)
-     - `keycloakUrl` with your deployed Keycloak endpoint (e.g., `https://your-keycloak.azurecontainerapps.io`)
-   - Save the changes
+Keycloak is still orchestrated by Aspire for when auth is enabled:
 
-3. **Authenticate for protected endpoints** (POST/PUT/DELETE requests):
-   - Navigate to the collection's **Authorization** tab
-   - Click **Get New Access Token** (OAuth 2.0 settings are pre-configured)
-   - Sign in on the Keycloak page with **demo** / **demo**
-   - Click **Use Token** to apply it to your requests
+| Purpose | Credentials |
+|---------|-------------|
+| Test user | `demo` / `demo` |
+| Admin console | `admin` / `admin` |
 
-You can now send requests to test your deployed API!
+Realm export: `src/Koffiegesels.AppHost/realms/koffiegesels-realm.json`
 
-## CI/CD Pipelines (Optional)
-
-### GitHub Actions
-
-While `aspire deploy` is great for manual deployments, you can set up automated CI/CD pipelines for continuous deployment.
-
-**Note**: The template includes a basic Azure Developer CLI configuration. You may need to adapt the GitHub Actions workflow to work with Aspire deployment commands or continue using the existing azd-based workflow.
-
-To set up GitHub Actions with Azure Developer CLI:
-
-1. **Install Azure Developer CLI** if not already installed:
-   ```bash
-   winget install microsoft.azd
-   ```
-
-2. **Initialize the Azure Developer CLI project**:
-   ```bash
-   azd init
-   ```
-
-3. **Run the pipeline configuration command**:
-   ```bash
-   azd pipeline config --provider github
-   ```
-
-4. **Follow the interactive prompts** to configure:
-   - GitHub repository connection
-   - Azure authentication (Federated Identity recommended)
-   - Deployment settings and environments
-
-4. **Commit and push** your changes to trigger the pipeline
-
-## Project Structure
+## Project structure
 
 ```
 ├── src/
-│   ├── TemplateApp.Api/              # Main Web API project
-│   │   ├── Features/                 # Feature-based organization (Vertical Slice Architecture)
-│   │   ├── Data/                     # Entity Framework context and configurations
-│   │   ├── Models/                   # Domain models
-│   │   └── Shared/                   # Shared components (auth, CORS, error handling, etc.)
-│   ├── TemplateApp.AppHost/          # Aspire orchestration
-│   └── TemplateApp.ServiceDefaults/  # Shared service configurations
-├── .github/workflows/                # GitHub Actions workflows
-├── .devcontainer/                    # Dev container configuration
-└── azure.yaml                       # Azure Developer CLI configuration
+│   ├── Koffiegesels.Api/           # Web API
+│   │   ├── Features/
+│   │   │   ├── Conversations/      # CRUD + entities
+│   │   │   └── Messages/           # AddMessage, SendMessage (AI)
+│   │   ├── Data/                   # KoffiegeselsContext, migrations
+│   │   └── Shared/                 # Ai, Prompts, Dev, Cors, Auth, OpenApi
+│   ├── Koffiegesels.AppHost/       # Aspire orchestration
+│   └── Koffiegesels.ServiceDefaults/
+├── web/                            # React + Vite frontend
+└── scripts/
+    └── smoke-test.ps1              # End-to-end API smoke test
 ```
 
 ## Architecture
 
-This template follows **Vertical Slice Architecture** principles, organizing code by features rather than technical layers. The architecture is structured as follows:
+**Vertical slice architecture** — each operation lives under `Features/<Feature>/<Operation>/` with its endpoint and DTOs colocated. No shared service god-classes.
 
-### Feature Organization
+**AI access** — feature code injects `IChatClient` only. The concrete provider (Ollama in dev, Azure OpenAI in prod) is configured in `Shared/Ai`.
 
-Each feature (like `Items` or `Categories`) in the `Features/` folder contains:
+**System prompt** — Afrikaans instructions live in one versioned place: `Shared/Prompts/KoffiegeselsPrompts.cs`.
 
-- **Feature Endpoints** - A main endpoints class that groups and maps all related routes
-- **Individual Operations** - Each operation (GetItems, CreateItem, UpdateItem, etc.) has its own folder containing:
-  - **Endpoint** - The minimal API endpoint definition with all business logic inline
-  - **DTOs** - Request/response models specific to that operation
+## Azure deployment
 
-### Example Structure
-
-```
-Features/
-├── Items/
-│   ├── ItemsEndpoints.cs           # Groups all item-related endpoints
-│   ├── Constants/                  # Shared constants for the feature
-│   ├── CreateItem/
-│   │   ├── CreateItemEndpoint.cs   # POST endpoint with business logic
-│   │   └── CreateItemDtos.cs       # Request/response DTOs
-│   ├── GetItems/
-│   │   ├── GetItemsEndpoint.cs     # GET collection endpoint
-│   │   └── GetItemsDtos.cs         # DTOs for pagination and filtering
-│   └── GetItem/
-│       ├── GetItemEndpoint.cs      # GET single item endpoint
-│       └── GetItemDtos.cs          # Single item response DTOs
-```
-
-### Key Principles
-
-This approach promotes:
-- **Self-contained operations** - Each endpoint contains its complete logic flow
-- **Feature cohesion** - All related operations are grouped together
-- **Minimal dependencies** - Each operation only depends on what it needs
-- **Easy testing** - Individual operations can be tested in isolation
-- **Simple maintenance** - Changes to one operation don't affect others
-
-## Installing the Template
-
-To use this template for creating new projects:
-
-1. **Navigate to the template root directory**
-2. **Install the template**:
-   ```bash
-   dotnet new install .\
-   ```
-
-### Using the Template
-
-Once installed, create a new project using the template:
+The repo includes Azure Developer CLI configuration (`azure.yaml`) and a GitHub Actions workflow (`.github/workflows/azure-dev.yml`). Production inference will use Azure OpenAI via the same `IChatClient` abstraction.
 
 ```bash
-# Create a new project in the current directory
-dotnet new backend
-
-# Create a new project with a specific name
-dotnet new backend -n MyAwesomeBackend
+aspire deploy
 ```
 
-### Template Parameters
+Post-deploy: import the Keycloak realm from `src/Koffiegesels.AppHost/realms/koffiegesels-realm.json`.
 
-The template supports the following parameters:
+## Contributing
 
-- `-n|--name`: Name of the project (default: current directory name)
-
-
-## Configuration
-
-### Local Development
-
-The template uses Keycloak for local authentication. Configuration is handled automatically through Aspire service discovery.
-
-**Key features enabled for local development:**
-- **Global error handling** - Consistent error responses across all endpoints
-- **CORS configuration** - Properly configured for local development
-- **Health checks** - Built-in health monitoring endpoints
-- **Logging and telemetry** - Integrated with Aspire dashboard
-
-### Production
-
-In production (Azure), the following are automatically configured:
-- Managed Identity for secure service-to-service communication
-- Azure Database for PostgreSQL
-- Container Apps for scalable hosting
-
+See [AGENTS.md](AGENTS.md) for run commands, architecture rules, and guardrails for AI-assisted development.
 
 ## License
 
-This template is provided as-is for educational and development purposes.
+Provided as-is for development and educational use.

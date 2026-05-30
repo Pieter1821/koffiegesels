@@ -30,9 +30,9 @@ dist/
 .DS_Store
 Thumbs.db
 
-# PRDs and internal planning docs (do not commit)
-docs/PRD.md
-docs/HANDOFF.md
-docs/ROADMAP.md
+# Internal planning docs (local only — never commit)
+docs/
 **/*PRD*.md
 **/*prd*.md
+**/*HANDOFF*.md
+**/*ROADMAP*.md
