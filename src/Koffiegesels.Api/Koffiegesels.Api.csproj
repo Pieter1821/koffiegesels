@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>a8f4c2e1-5b6d-4e7f-9c0a-1b2d3e4f5a6b</UserSecretsId>
+    <!-- Launch via the trusted `dotnet` host (no unsigned native .exe) so Windows
+         Smart App Control does not block locally-built dev binaries. -->
+    <UseAppHost>false</UseAppHost>
   </PropertyGroup>
 
   <ItemGroup>
