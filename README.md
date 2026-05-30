@@ -5,7 +5,7 @@ Afrikaans-first chat API and web app. Built on .NET 10 with Aspire, PostgreSQL, 
 ## Overview
 
 - **Backend** — .NET 10 Web API, Entity Framework Core, PostgreSQL, vertical slice architecture
-- **AI** — `Microsoft.Extensions.AI` with Ollama locally (`phi4-mini` by default); Azure OpenAI in production
+- **AI** — `Microsoft.Extensions.AI` with Ollama locally (`phi4-mini` by default; see model notes below); Azure OpenAI in production
 - **Frontend** — React 19, TypeScript, Vite (chat UI in progress)
 - **Orchestration** — Aspire AppHost (API, Postgres, Keycloak, pgAdmin)
 - **Auth** — Keycloak realm included; JWT enforcement deferred until the chat loop is complete (see [Auth status](#auth-status))
@@ -16,7 +16,7 @@ Afrikaans-first chat API and web app. Built on .NET 10 with Aspire, PostgreSQL, 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) — Postgres and Keycloak
 - [Aspire CLI](https://learn.microsoft.com/dotnet/aspire/cli/install) — optional; `dotnet run` works too
 - [Node.js](https://nodejs.org/) — for the Vite frontend
-- [Ollama](https://ollama.com) — for local AI replies (`ollama pull phi4-mini` or another model)
+- [Ollama](https://ollama.com) — for local AI replies (`ollama pull phi4-mini` or a 7B model; see below)
 
 ## Getting started
 
@@ -67,7 +67,24 @@ Default model is set in `src/Koffiegesels.Api/appsettings.json` (`Ollama:Model`)
 dotnet user-secrets set "Ollama:Model" "phi4-mini:latest" --project src/Koffiegesels.Api
 ```
 
-## Testing the API
+**Model choice (~16 GB RAM):**
+
+| Model | RAM when loaded | Quality | Notes |
+|-------|-----------------|---------|-------|
+| `phi4-mini:latest` | ~3 GB | Basic | Default — fast, light, weak Afrikaans |
+| `qwen2.5:7b` | ~5–6 GB | Good | Best local balance for 16 GB systems |
+| `llama3.1:8b` | ~5–6 GB | Good | Solid alternative to Qwen |
+| `glm-4.6:cloud` | Low local | Best | Cloud — needs sign-in; heavy if run locally |
+
+For noticeably better replies without cloud RAM cost:
+
+```powershell
+ollama pull qwen2.5:7b
+dotnet user-secrets set "Ollama:Model" "qwen2.5:7b" --project src/Koffiegesels.Api
+```
+
+Restart the API after changing the model.
+
 
 ### Smoke test (recommended)
 
@@ -107,7 +124,7 @@ The `/send` endpoint returns `{ "userMessage", "assistantMessage" }`. It may res
 | Setting | Location | Notes |
 |---------|----------|-------|
 | `Ollama:Endpoint` | `appsettings.json` | Default `http://localhost:11434` |
-| `Ollama:Model` | `appsettings.json` / user-secrets | e.g. `phi4-mini:latest` |
+| `Ollama:Model` | `appsettings.json` / user-secrets | e.g. `phi4-mini:latest`, `qwen2.5:7b` |
 | `Chat:MaxTokens` | `appsettings.json` | Cap per AI request |
 | `Chat:MaxHistoryMessages` | `appsettings.json` | Prior messages sent as context |
 | `DevUser:UserId` | `appsettings.json` | Stub owner for all conversations (dev) |

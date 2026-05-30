@@ -66,6 +66,9 @@ builder.Services.AddValidation();
 
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
+    // Explicit camelCase — matches frontend types (id, createdAt, …). Web defaults
+    // already use camelCase; setting it here avoids regressions if defaults change.
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     options.SerializerOptions.Converters.Add(
         new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
 });
